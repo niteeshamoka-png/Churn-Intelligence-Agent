@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StreamNest Retention Desk: Churn Intelligence Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F1; --panel:#FFFFFF; --ink:#17212B; --muted:#5B6975; --line:#D5DAD6; --lineSoft:#E7EAE7;
+  --teal:#0E7C7B; --tealSoft:#DCEFEC; --crimson:#C8344B; --critSoft:#F8E1E5; --amber:#A66F00; --amberSoft:#FBEBC8;
+  --focus:#1F5FBF; --onInk:#FFFFFF;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F151B; --panel:#17202A; --ink:#E6ECF0; --muted:#9AA8B4; --line:#2B3845; --lineSoft:#22303B;
+    --teal:#3FC1B6; --tealSoft:#12332F; --crimson:#F2677C; --critSoft:#3A1B24; --amber:#F0B84A; --amberSoft:#3A2E10;
+    --focus:#7FB2FF; --onInk:#0F151B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F151B; --panel:#17202A; --ink:#E6ECF0; --muted:#9AA8B4; --line:#2B3845; --lineSoft:#22303B;
+  --teal:#3FC1B6; --tealSoft:#12332F; --crimson:#F2677C; --critSoft:#3A1B24; --amberSoft:#3A2E10; --amber:#F0B84A;
+  --focus:#7FB2FF; --onInk:#0F151B;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;-webkit-text-size-adjust:100%}
+h1,h2,h3,.num{font-family:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;letter-spacing:-.01em}
+h1{font-size:20px;margin:0;line-height:1.2}
+h2{font-size:26px;line-height:1.2;margin:0 0 6px;font-weight:700}
+h3{font-size:17px;margin:0 0 8px;font-weight:700}
+p{margin:0 0 10px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);border-bottom:1px solid var(--line);padding:12px 20px 0}
+.top-row{max-width:1180px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 28px;align-items:flex-end;justify-content:space-between}
+.brand p{margin:0;font-size:13px;color:var(--muted)}
+.cutoff{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);padding-bottom:8px}
+.cutoff input{width:150px;accent-color:var(--crimson)}
+.cutoff b{color:var(--ink);font-variant-numeric:tabular-nums;min-width:34px;display:inline-block}
+.tabs{max-width:1180px;margin:8px auto 0;display:flex;gap:4px;overflow-x:auto}
+.tab{background:none;border:0;border-bottom:3px solid transparent;padding:9px 14px;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.tab:hover{color:var(--ink)}
+
+main{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+section[hidden]{display:none}
+
+/* KPI band */
+.band{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border-top:2px solid var(--ink);border-bottom:1px solid var(--line);margin:18px 0 26px;background:var(--panel)}
+.kpi{padding:14px 16px;border-left:1px solid var(--line)}
+.kpi:first-child{border-left:0}
+.kpi .num{font-size:28px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .lab{font-size:13px;color:var(--muted);margin-top:2px}
+.kpi.risk .num{color:var(--crimson)}
+
+.grid2{display:grid;grid-template-columns:3fr 2fr;gap:22px}
+.grid2.even{grid-template-columns:1fr 1fr}
+@media (max-width:860px){.grid2,.grid2.even{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:22px}
+.panel h3{margin-bottom:2px}
+.panel .sub{font-size:13px;color:var(--muted);margin-bottom:12px}
+
+svg{display:block;width:100%;height:auto}
+svg text{font-family:'Instrument Sans',system-ui,sans-serif;font-size:11px;fill:var(--muted)}
+.bar-risk{fill:var(--crimson)}
+.bar-safe{fill:var(--teal);opacity:.55}
+.gridline{stroke:var(--lineSoft);stroke-width:1}
+.thr-line{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 3}
+
+/* bars */
+.hrow{display:grid;grid-template-columns:150px 1fr 96px;gap:10px;align-items:center;padding:6px 0;font-size:14px}
+.hrow .track{height:10px;background:var(--lineSoft);border-radius:5px;overflow:hidden}
+.hrow .fill{height:100%;border-radius:5px}
+.hrow .val{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:-1px}
+.drow{display:grid;grid-template-columns:150px 1fr 48px;gap:10px;align-items:center;padding:5px 0;font-size:13px}
+.dv{position:relative;height:12px;background:var(--lineSoft);border-radius:2px}
+.dv:after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
+.dv i{position:absolute;top:0;bottom:0;display:block}
+.dn{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+@media (max-width:520px){.hrow{grid-template-columns:110px 1fr 70px}.drow{grid-template-columns:110px 1fr 44px}}
+
+/* tables */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:13px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--lineSoft);vertical-align:middle}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.pick{cursor:pointer}
+tr.pick:hover td{background:var(--lineSoft)}
+tr.sel td{background:var(--tealSoft)}
+.riskcell{display:flex;align-items:center;gap:8px;min-width:120px}
+.riskcell .track{flex:1;height:8px;background:var(--lineSoft);border-radius:4px;overflow:hidden}
+.riskcell .fill{height:100%;background:var(--crimson)}
+.riskcell b{font-variant-numeric:tabular-nums;width:38px;text-align:right}
+.lift{font-weight:600}
+
+/* buttons / controls */
+.btn{background:var(--ink);color:var(--onInk);border:1px solid var(--ink);padding:9px 16px;border-radius:7px;cursor:pointer;font-weight:600}
+.btn:hover{opacity:.9}
+.btn.alt{background:transparent;color:var(--ink);border-color:var(--ink)}
+.btn.sm{padding:5px 11px;font-size:13px}
+.btn.go{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn:disabled{opacity:.5;cursor:default}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:flex-end;margin-bottom:18px}
+.ctrl label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.ctrl select{padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);min-width:190px;max-width:100%}
+.ctrl input[type=range]{accent-color:var(--teal);width:200px}
+.ctrl label b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* segments */
+.seg{background:var(--panel);border:1px solid var(--line);border-left-width:6px;border-radius:4px;padding:16px 18px;margin-bottom:16px}
+.seg-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;align-items:baseline;margin-bottom:6px}
+.seg-head h3{margin:0}
+.seg-cols{display:grid;grid-template-columns:1.1fr 1fr 1.1fr;gap:20px;margin-top:10px}
+@media (max-width:860px){.seg-cols{grid-template-columns:1fr;gap:12px}}
+.seg dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:14px}
+.seg dt{color:var(--muted)}
+.seg dd{margin:0;font-variant-numeric:tabular-nums}
+.seg .k{font-weight:600;font-size:13px;color:var(--muted);margin-bottom:4px}
+
+/* detail */
+.detail{position:sticky;top:130px;align-self:start}
+@media (max-width:860px){.detail{position:static}}
+.big{font-size:44px;font-weight:700;line-height:1}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.pill.hi{background:var(--critSoft);color:var(--crimson)}
+.pill.md{background:var(--amberSoft);color:var(--amber)}
+.pill.lo{background:var(--tealSoft);color:var(--teal)}
+dl.prof{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:10px 0 14px;font-size:14px}
+dl.prof dt{color:var(--muted)}dl.prof dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+
+/* agent trace */
+.trace{margin:0;padding:0;list-style:none}
+.step{position:relative;padding:0 0 18px 38px;opacity:.38}
+.step:before{content:"";position:absolute;left:11px;top:24px;bottom:-2px;width:2px;background:var(--line)}
+.step:last-child:before{display:none}
+.step .node{position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);background:var(--panel);display:grid;place-items:center;font-size:12px;font-weight:700}
+.step.on{opacity:1}
+.step.on .node{background:var(--teal);border-color:var(--teal);color:#fff}
+.step h4{margin:0 0 2px;font-size:15px;font-family:'Bricolage Grotesque','Instrument Sans',sans-serif}
+.step .body{font-size:14px}
+.msg{margin:8px 0 0;padding:10px 12px;border-left:4px solid var(--teal);background:var(--tealSoft);border-radius:0 6px 6px 0;font-size:14px}
+.flag{margin:8px 0 0;padding:8px 12px;border-left:4px solid var(--amber);background:var(--amberSoft);border-radius:0 6px 6px 0;font-size:13px}
+.verdict{margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:8px 0}
+.nums div{background:var(--bg);border-radius:6px;padding:7px 10px}
+.nums .num{font-size:19px;font-weight:700;display:block;font-variant-numeric:tabular-nums}
+.nums span.l{font-size:12px;color:var(--muted)}
+.progress{height:8px;background:var(--lineSoft);border-radius:4px;overflow:hidden;margin:10px 0}
+.progress i{display:block;height:100%;background:var(--teal);width:0;transition:width .7s ease}
+@media (prefers-reduced-motion: reduce){.progress i{transition:none}}
+footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+footer b{color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <div class="brand">
+      <h1>StreamNest retention desk</h1>
+      <p>A churn intelligence agent running on simulated subscription data</p>
+    </div>
+    <div class="cutoff">
+      <label for="thr">At-risk cutoff</label>
+      <input id="thr" type="range" min="30" max="90" step="5" value="50" aria-describedby="thrv">
+      <b id="thrv">50%</b>
+    </div>
+  </div>
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button class="tab" role="tab" data-tab="segments" aria-selected="false">Segments and causes</button>
+    <button class="tab" role="tab" data-tab="customers" aria-selected="false">Customers</button>
+    <button class="tab" role="tab" data-tab="agent" aria-selected="false">Retention agent</button>
+  </div>
+</header>
+
+<main>
+  <section id="tab-overview" role="tabpanel"></section>
+  <section id="tab-segments" role="tabpanel" hidden></section>
+  <section id="tab-customers" role="tabpanel" hidden></section>
+  <section id="tab-agent" role="tabpanel" hidden></section>
+  <footer>
+    <p><b>How this demo works.</b> All customers are simulated. 8,000 past customers with known outcomes train a logistic regression model (6,400 for training, 1,600 held back to test it). The model then scores 10,000 live customers. Segments come from each customer's biggest churn driver. Retention messages are drafted from playbook templates; in a production build, an LLM would write them using the same playbook as its knowledge base.</p>
+    <p>Revenue figures are estimates: expected revenue protected = churn risk × playbook save rate × 12 months of fees.</p>
+  </footer>
+</main>
+
+<script>
+/* ============ DATA AND MODEL ============ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd=mulberry32(20261010);
+const randn=()=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const expo=m=>-m*Math.log(1-rnd());
+const pois=l=>{const L=Math.exp(-l);let k=0,p=1;do{k++;p*=rnd()}while(p>L);return k-1};
+const normal=(m,s)=>m+s*randn();
+const sig=z=>1/(1+Math.exp(-z));
+
+const FIRST=['Aarav','Diya','Rohan','Ananya','Vikram','Meera','Karthik','Sneha','Arjun','Priya','Rahul','Isha','Suresh','Kavya','Nikhil','Pooja','Manoj','Lakshmi','Sanjay','Divya','Amit','Neha','Harsha','Swathi','Ravi','Shruti','Varun','Anjali','Imran','Fatima','Gopal','Tara','Deepak','Nandini','Sameer','Rekha','Tejas','Bhavna','Yash','Mansi'];
+const PLANS=[['Basic',249],['Standard',499],['Premium',899]];
+const CHANNELS=['Email','WhatsApp','SMS','App push'];
+const PERSONA=[['healthy',.55],['newcomer',.10],['drifter',.10],['price',.10],['frustrated',.08],['payment',.07]];
+function pickPersona(){let r=rnd(),c=0;for(const [k,w] of PERSONA){c+=w;if(r<c)return k}return 'healthy'}
+
+function make(i,liveId){
+  const p=pickPersona();
+  let tenure,logins,days,usage,failed,tickets,csat,hike,disc,offers;
+  tenure=clamp(Math.round(2+expo(16)),2,60);
+  logins=clamp(Math.round(normal(18,6)),1,30);
+  days=clamp(Math.round(expo(2.5)),0,12);
+  usage=clamp(Math.round(normal(0,12)),-90,60);
+  failed=rnd()<.05?1:0; tickets=pois(.5); csat=clamp(Math.round(normal(4.2,.7)),1,5);
+  hike=rnd()<.2?1:0; disc=rnd()<.25?1:0; offers=pois(.5);
+  if(p==='newcomer'){tenure=1+Math.floor(rnd()*3);logins=clamp(Math.round(normal(4,2.5)),0,12);days=clamp(Math.round(3+expo(9)),0,30);usage=clamp(Math.round(normal(-35,15)),-90,10);csat=clamp(Math.round(normal(3.6,.9)),1,5);hike=rnd()<.1?1:0;disc=rnd()<.3?1:0}
+  if(p==='drifter'){tenure=6+Math.floor(rnd()*34);logins=clamp(Math.round(normal(5,3)),0,14);days=clamp(Math.round(8+expo(5)),0,40);usage=clamp(Math.round(normal(-45,15)),-95,0)}
+  if(p==='price'){tenure=clamp(Math.round(3+expo(14)),3,60);hike=rnd()<.9?1:0;disc=rnd()<.8?1:0;usage=clamp(Math.round(normal(-12,12)),-70,30);logins=clamp(Math.round(normal(12,5)),1,28);csat=clamp(Math.round(normal(3.8,.8)),1,5);offers=1+pois(.9)}
+  if(p==='frustrated'){tenure=clamp(Math.round(3+expo(14)),3,60);tickets=3+Math.floor(rnd()*4);csat=clamp(Math.round(normal(2,.7)),1,3);logins=clamp(Math.round(normal(10,5)),1,25);usage=clamp(Math.round(normal(-15,15)),-80,30)}
+  if(p==='payment'){tenure=clamp(Math.round(3+expo(14)),3,60);failed=2+Math.floor(rnd()*3);logins=clamp(Math.round(normal(14,6)),1,28)}
+  const pr=rnd();const plan=pr<.40?0:pr<.78?1:2;
+  const z=-1.4+.12*days-.05*logins-.025*usage-.05*Math.min(tenure,24)+.55*failed+.35*tickets-.45*(csat-3)+1.6*hike+.5*disc+.6*randn();
+  const first=FIRST[Math.floor(rnd()*FIRST.length)];
+  const cr=rnd();
+  return {id:liveId?('C'+(10001+i)):('H'+i),first,name:first+' '+String.fromCharCode(65+Math.floor(rnd()*26))+'.',
+    plan:PLANS[plan][0],fee:PLANS[plan][1],tenure,logins,days,usage,failed,tickets,csat,hike,disc,offers,
+    channel:cr<.4?'Email':cr<.65?'WhatsApp':cr<.85?'SMS':'App push',
+    churned:rnd()<sig(z)?1:0,
+    x:[Math.min(tenure,24),logins,days,usage,failed,tickets,csat,hike,disc]};
+}
+const past=[],live=[];
+for(let i=0;i<8000;i++)past.push(make(i,false));
+for(let i=0;i<10000;i++)live.push(make(i,true));
+
+const FEATS=[
+  {label:'Tenure',g:'Early life'},
+  {label:'Logins in 30 days',g:'Disengagement'},
+  {label:'Days since login',g:'Disengagement'},
+  {label:'Usage change',g:'Disengagement'},
+  {label:'Failed payments',g:'Payment'},
+  {label:'Support tickets',g:'Service'},
+  {label:'Satisfaction score',g:'Service'},
+  {label:'Price increase',g:'Price'},
+  {label:'Discount reliance',g:'Price'}
+];
+const NF=FEATS.length;
+const trainRows=past.slice(0,6400),testRows=past.slice(6400);
+const mu=new Array(NF).fill(0),sd=new Array(NF).fill(0);
+trainRows.forEach(c=>c.x.forEach((v,j)=>mu[j]+=v/trainRows.length));
+trainRows.forEach(c=>c.x.forEach((v,j)=>sd[j]+=(v-mu[j])**2/trainRows.length));
+for(let j=0;j<NF;j++)sd[j]=Math.sqrt(sd[j])||1;
+const zf=c=>c.x.map((v,j)=>(v-mu[j])/sd[j]);
+
+const W=new Float64Array(NF);let B=0;
+(function train(){
+  const n=trainRows.length,Z=new Float64Array(n*NF),Y=new Float64Array(n);
+  trainRows.forEach((c,i)=>{const z=zf(c);for(let j=0;j<NF;j++)Z[i*NF+j]=z[j];Y[i]=c.churned});
+  const lr=.8;
+  for(let it=0;it<500;it++){
+    const g=new Float64Array(NF);let gb=0;
+    for(let i=0;i<n;i++){let z=B;for(let j=0;j<NF;j++)z+=W[j]*Z[i*NF+j];const e=sig(z)-Y[i];for(let j=0;j<NF;j++)g[j]+=e*Z[i*NF+j];gb+=e}
+    for(let j=0;j<NF;j++)W[j]-=lr*(g[j]/n+.001*W[j]);
+    B-=lr*gb/n;
+  }
+})();
+function score(c){const z=zf(c);c.contrib=z.map((v,j)=>W[j]*v);c.risk=sig(B+c.contrib.reduce((a,b)=>a+b,0))}
+past.forEach(score);live.forEach(score);
+function auc(rows){
+  const s=rows.map(c=>[c.risk,c.churned]).sort((a,b)=>a[0]-b[0]);
+  let rk=0,nP=0;s.forEach((r,i)=>{if(r[1]){rk+=i+1;nP++}});const nN=s.length-nP;
+  return (rk-nP*(nP+1)/2)/(nP*nN);
+}
+const AUC=auc(testRows);
+const PAST_CHURN=past.reduce((a,c)=>a+c.churned,0)/past.length;
+
+/* segmentation by dominant driver */
+const GROUPS=['Disengagement','Early life','Price','Service','Payment'];
+live.forEach(c=>{
+  const s={};GROUPS.forEach(g=>s[g]=0);
+  c.contrib.forEach((v,j)=>{if(v>0)s[FEATS[j].g]+=v});
+  let best='Disengagement',m=-1;for(const g of GROUPS)if(s[g]>m){m=s[g];best=g}
+  c.driver=best;
+  c.seg=best==='Disengagement'?(c.tenure<=4?'newcomers':'drifters'):best==='Early life'?'newcomers':best==='Price'?'price':best==='Service'?'frustrated':'payment';
+});
+
+/*--UI--*/
+/* ============ PLAYBOOKS (the agent's knowledge base) ============ */
+const SEGKEYS=['newcomers','drifters','price','frustrated','payment'];
+const SEG={
+  newcomers:{name:'Fading Newcomers',color:'#6C63D9',cause:'They never found their footing in the first weeks, so the service has not become a habit.',playbook:'Onboarding rescue v2',
+    main:c=>({cost:30,save:.30,offer:'7-day guided onboarding with 5 titles matched to their taste',channel:'Email and app push',timing:'Within 24 hours, then on days 3 and 7',
+      msg:`Hi ${c.first}, welcome again! You've logged in ${c.logins} time${c.logins===1?'':'s'} this month, so here are five titles picked for you to start tonight. Reply to this message and we'll set up your watchlist together.`})},
+  drifters:{name:'Quiet Drifters',color:'#2F7FB5',cause:'Longer-tenure customers whose usage has faded. They are not unhappy, just not engaged.',playbook:'Re-engagement credit v1.4',capped:true,
+    main:c=>({cost:60,save:.22,offer:'One month of the Premium add-on, free',channel:c.channel,timing:'This week, before the next billing date',
+      msg:`Hi ${c.first}, it's been ${c.days} days since we saw you. Three new releases in your favourite genres just landed, and we've added a free month of the Premium add-on to your account.`}),
+    fb:c=>({cost:0,save:.10,offer:'Personalised "new for you" digest, no discount',channel:c.channel,timing:'This week',
+      msg:`Hi ${c.first}, here is what's new in your favourite genres since your last visit ${c.days} days ago.`})},
+  price:{name:'Price-Sensitive',color:'#D98A1F',cause:'Churn rises after a fee increase, and these customers already lean on discounts.',playbook:'Price-fit offer v3',capped:true,
+    main:(c,r)=>{const pct=r>.85?.20:.10;return{cost:Math.round(c.fee*pct*3),save:.35+(pct-.10)*1.5,offer:`${Math.round(pct*100)}% off for 3 months, or a move to a cheaper plan`,channel:c.channel,timing:'Right after the next invoice',
+      msg:`Hi ${c.first}, we know prices have gone up. As a thank-you for ${c.tenure} months with us, take ${Math.round(pct*100)}% off your ${c.plan} plan for 3 months, or switch to a lower tier whenever you like.`}},
+    fb:c=>({cost:15,save:.12,offer:'Plan-fit review showing cheaper tiers and the annual option',channel:c.channel,timing:'Right after the next invoice',
+      msg:`Hi ${c.first}, want to be sure your ${c.plan} plan still fits? Here is a quick comparison of our tiers and the annual option.`})},
+  frustrated:{name:'Frustrated Customers',color:'#B8458F',cause:'Several support tickets and low satisfaction scores point to a service failure.',playbook:'Service recovery v2.1',
+    main:c=>({cost:230,save:.40,offer:'Priority callback within 24 hours plus a ₹150 service credit',channel:'Phone call, then email',timing:'Within 24 hours',
+      msg:`Hi ${c.first}, we're sorry your last ${c.tickets} requests took so long. A senior specialist will call you within 24 hours, and we've added a ₹150 credit to your account.`}),
+    fb:c=>({cost:80,save:.28,offer:'Priority callback within 24 hours, no credit',channel:'Phone call, then email',timing:'Within 24 hours',
+      msg:`Hi ${c.first}, a senior specialist will call you within 24 hours to resolve your open issues.`})},
+  payment:{name:'Payment Failures',color:'#3E8E5A',cause:'Mostly involuntary churn: cards or UPI mandates fail while the customer is still active.',playbook:'Payment recovery v1.2',
+    main:c=>({cost:10,save:.55,offer:'Automatic retry, a backup payment link (UPI or card) and a reminder',channel:'SMS and WhatsApp',timing:'Within 2 hours of the failed charge',
+      msg:`Hi ${c.first}, your last payment didn't go through (${c.failed} attempt${c.failed>1?'s':''}). Tap here to update your UPI or card in 20 seconds and keep watching without a break.`})}
+};
+const SIGNALS=[
+  ['No login for 10 or more days',c=>c.days>=10],
+  ['Usage down 40% or more',c=>c.usage<=-40],
+  ['Two or more failed payments',c=>c.failed>=2],
+  ['3+ tickets and satisfaction of 2 or less',c=>c.tickets>=3&&c.csat<=2],
+  ['Under 3 months as a customer',c=>c.tenure<3],
+  ['Hit by the price increase',c=>c.hike===1]
+];
+
+/* ============ HELPERS ============ */
+const $=s=>document.querySelector(s);
+const fmt=n=>Math.round(n).toLocaleString('en-IN');
+const inr=n=>{n=Math.round(n);const a=Math.abs(n);if(a>=1e7)return '₹'+(n/1e7).toFixed(2)+' crore';if(a>=1e5)return '₹'+(n/1e5).toFixed(1)+' lakh';return '₹'+n.toLocaleString('en-IN')};
+const pc=(x,d=0)=>(x*100).toFixed(d)+'%';
+const band=r=>r>=.75?['High','hi']:r>=.5?['Elevated','md']:['Lower','lo'];
+const R=[c=>`Only ${c.tenure} month${c.tenure>1?'s':''} as a customer`,c=>`Just ${c.logins} logins in 30 days`,c=>`${c.days} days since last login`,c=>`Usage ${c.usage<0?'down '+Math.abs(c.usage):'up '+c.usage}% on last month`,c=>`${c.failed} failed payment${c.failed>1?'s':''}`,c=>`${c.tickets} support tickets in 90 days`,c=>`Satisfaction score ${c.csat} out of 5`,()=>'Affected by the recent price increase',()=>'Mostly stays on discounts'];
+function topReasons(c,n=3){return c.contrib.map((v,j)=>[v,j]).filter(a=>a[0]>.08).sort((a,b)=>b[0]-a[0]).slice(0,n).map(a=>({j:a[1],v:a[0],text:R[a[1]](c)}))}
+const reduced=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const state={tab:'overview',thr:.5,selId:null,segF:'all',planF:'all',shown:30,limit:150,scale:1,approvals:{},trace:0,traceId:null,batch:false,batchPct:0};
+let atRisk=[];
+function refresh(){atRisk=live.filter(c=>c.risk>=state.thr).sort((a,b)=>b.risk-a.risk);if(!state.selId&&atRisk.length)state.selId=atRisk[0].id}
+
+/* ============ PLAN BUILDER (Retention Strategy Agent) ============ */
+function makePlan(c){
+  const S=SEG[c.seg];const flags=[];
+  let part=S.main(c,c.risk);
+  if(S.capped&&c.offers>=2){part=S.fb(c);flags.push(`Discount blocked: ${c.offers} offers were already sent in the last 90 days, so a non-discount action is used.`)}
+  const annual=c.fee*12;const save=clamp(part.save*state.scale,0,.9);
+  const gain=c.risk*save*annual;const net=gain-part.cost;
+  let final;
+  if(net<=0)final='skip';
+  else if(part.cost>state.limit){const a=state.approvals[c.id];final=a==='approved'?'approved':a==='rejected'?'rejected':'pending'}
+  else final='auto';
+  return {...part,save,gain,net,final,flags,annual};
+}
+
+/* ============ TABS ============ */
+function setTab(t){
+  state.tab=t;
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));
+  ['overview','segments','customers','agent'].forEach(k=>{$('#tab-'+k).hidden=k!==t});
+  ({overview:renderOverview,segments:renderSegments,customers:renderCustomers,agent:renderAgent})[t]();
+}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.tab)));
+$('#thr').addEventListener('input',e=>{
+  state.thr=e.target.value/100;$('#thrv').textContent=e.target.value+'%';
+  state.shown=30;state.batch=false;refresh();
+  if(!atRisk.find(c=>c.id===state.selId))state.selId=atRisk[0]?atRisk[0].id:null;
+  setTab(state.tab);
+});
+
+/* ============ OVERVIEW ============ */
+function histSVG(){
+  const bins=new Array(20).fill(0);live.forEach(c=>bins[Math.min(19,Math.floor(c.risk*20))]++);
+  const Wd=640,H=230,pl=40,pr=8,pt=12,pb=28,bw=(Wd-pl-pr)/20,mx=Math.max(...bins);
+  let s=`<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Number of live customers at each churn risk level. Customers right of the dashed line are at risk.">`;
+  for(let t=0;t<=4;t++){const y=pt+(H-pt-pb)*(1-t/4);s+=`<line class="gridline" x1="${pl}" x2="${Wd-pr}" y1="${y}" y2="${y}"/><text x="${pl-6}" y="${y+4}" text-anchor="end">${fmt(mx*t/4)}</text>`}
+  bins.forEach((n,i)=>{const h=(H-pt-pb)*n/mx,x=pl+i*bw,risk=(i+.5)/20>=state.thr;s+=`<rect class="${risk?'bar-risk':'bar-safe'}" x="${x+1}" y="${H-pb-h}" width="${bw-2}" height="${h}" rx="1.5"/>`});
+  const tx=pl+state.thr*20*bw;
+  s+=`<line class="thr-line" x1="${tx}" x2="${tx}" y1="${pt-4}" y2="${H-pb}"/>`;
+  [0,.25,.5,.75,1].forEach(v=>{s+=`<text x="${pl+v*20*bw}" y="${H-8}" text-anchor="middle">${Math.round(v*100)}%</text>`});
+  return s+'</svg>';
+}
+function renderOverview(){
+  const n=atRisk.length,mrrAll=live.reduce((a,c)=>a+c.fee,0),mrrRisk=atRisk.reduce((a,c)=>a+c.fee,0),exp=live.reduce((a,c)=>a+c.risk,0);
+  const segN={};SEGKEYS.forEach(k=>segN[k]={n:0,mrr:0});atRisk.forEach(c=>{segN[c.seg].n++;segN[c.seg].mrr+=c.fee});
+  const maxN=Math.max(1,...SEGKEYS.map(k=>segN[k].n));
+  const order=SEGKEYS.slice().sort((a,b)=>segN[b].n-segN[a].n);
+  const drivers=FEATS.map((f,j)=>({label:f.label,w:W[j]})).sort((a,b)=>b.w-a.w);
+  const mw=Math.max(...drivers.map(d=>Math.abs(d.w)));
+  const base=PAST_CHURN;
+  const sigRows=SIGNALS.map(([l,fn])=>{const m=past.filter(fn);const r=m.filter(c=>c.churned).length/m.length;return {l,n:m.length,r,lift:r/base}}).sort((a,b)=>b.lift-a.lift);
+  $('#tab-overview').innerHTML=`
+    <h2>${fmt(n)} of ${fmt(live.length)} live customers look likely to leave</h2>
+    <p class="muted">At a ${pc(state.thr)} cutoff, they carry ${inr(mrrRisk)} of monthly revenue. Move the cutoff above to widen or narrow the list.</p>
+    <div class="band">
+      <div class="kpi"><div class="num">${fmt(live.length)}</div><div class="lab">Live customers</div></div>
+      <div class="kpi"><div class="num">${inr(mrrAll)}</div><div class="lab">Monthly revenue</div></div>
+      <div class="kpi risk"><div class="num">${pc(n/live.length,1)}</div><div class="lab">At risk (${fmt(n)} customers)</div></div>
+      <div class="kpi risk"><div class="num">${inr(mrrRisk)}</div><div class="lab">Monthly revenue at risk</div></div>
+      <div class="kpi"><div class="num">${fmt(exp)}</div><div class="lab">Expected to leave in 90 days</div></div>
+      <div class="kpi"><div class="num">${AUC.toFixed(2)}</div><div class="lab">Model accuracy (AUC, held-out test)</div></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="panel"><h3>How risky is the customer base?</h3><div class="sub">Customers by churn risk score. Red bars are at or above your cutoff.</div>${histSVG()}</div>
+        <div class="panel"><h3>Early-warning signals in past customers</h3>
+          <div class="sub">Among 8,000 past customers, ${pc(base,1)} churned overall. This shows how much more likely each signal makes it.</div>
+          <div class="tw"><table><thead><tr><th>Signal</th><th class="n">Customers</th><th class="n">Churned</th><th class="n">Times the baseline</th></tr></thead><tbody>
+          ${sigRows.map(r=>`<tr><td>${r.l}</td><td class="n">${fmt(r.n)}</td><td class="n">${pc(r.r)}</td><td class="n lift">${r.lift.toFixed(1)}×</td></tr>`).join('')}
+          </tbody></table></div></div>
+      </div>
+      <div>
+        <div class="panel"><h3>Who is at risk</h3><div class="sub">At-risk customers by segment, with monthly revenue.</div>
+          ${order.map(k=>`<div class="hrow"><span><i class="dot" style="background:${SEG[k].color}"></i>${SEG[k].name}</span><span class="track"><span class="fill" style="display:block;width:${segN[k].n/maxN*100}%;background:${SEG[k].color}"></span></span><span class="val">${fmt(segN[k].n)} · ${inr(segN[k].mrr)}</span></div>`).join('')}
+        </div>
+        <div class="panel"><h3>What the model learned</h3><div class="sub">Effect of a higher value of each signal on churn risk. Right raises risk, left lowers it.</div>
+          ${drivers.map(d=>`<div class="drow"><span>${d.label}</span><span class="dv"><i style="${d.w>=0?'left:50%':'right:50%'};width:${Math.abs(d.w)/mw*50}%;background:${d.w>=0?'var(--crimson)':'var(--teal)'}"></i></span><span class="dn">${d.w>=0?'+':''}${d.w.toFixed(2)}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ============ SEGMENTS ============ */
+function renderSegments(){
+  const st={};SEGKEYS.forEach(k=>st[k]={n:0,mrr:0,risk:0,days:0,logins:0,usage:0,failed:0,tickets:0,csat:0,tenure:0,hike:0,reasons:{}});
+  atRisk.forEach(c=>{const s=st[c.seg];s.n++;s.mrr+=c.fee;s.risk+=c.risk;s.days+=c.days;s.logins+=c.logins;s.usage+=c.usage;s.failed+=c.failed;s.tickets+=c.tickets;s.csat+=c.csat;s.tenure+=c.tenure;s.hike+=c.hike;
+    topReasons(c,2).forEach(r=>{s.reasons[FEATS[r.j].label]=(s.reasons[FEATS[r.j].label]||0)+1})});
+  const order=SEGKEYS.slice().sort((a,b)=>st[b].n-st[a].n);
+  $('#tab-segments').innerHTML=`
+    <h2>Five reasons customers leave, five different responses</h2>
+    <p class="muted">Each at-risk customer is placed in the segment of their single biggest churn driver. Stats below cover the ${fmt(atRisk.length)} customers above your cutoff.</p>
+    ${order.map(k=>{const s=st[k],S=SEG[k],n=Math.max(1,s.n);
+      const top=Object.entries(s.reasons).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      const ex=S.main({first:'Name',tenure:5,days:12,logins:3,usage:-40,failed:2,tickets:4,csat:2,plan:'Standard',fee:499,channel:'Email',offers:0},.7);
+      return `<article class="seg" style="border-left-color:${S.color}">
+        <div class="seg-head"><h3>${S.name}</h3><span class="muted small">${fmt(s.n)} customers, ${inr(s.mrr)} a month, average risk ${pc(s.risk/n)}</span></div>
+        <p>${S.cause}</p>
+        <div class="seg-cols">
+          <div><div class="k">Typical profile</div><dl>
+            <dt>Days since login</dt><dd>${(s.days/n).toFixed(1)}</dd>
+            <dt>Logins in 30 days</dt><dd>${(s.logins/n).toFixed(1)}</dd>
+            <dt>Usage change</dt><dd>${(s.usage/n).toFixed(0)}%</dd>
+            <dt>Failed payments</dt><dd>${(s.failed/n).toFixed(1)}</dd>
+            <dt>Tickets (90 days)</dt><dd>${(s.tickets/n).toFixed(1)}</dd>
+            <dt>Satisfaction</dt><dd>${(s.csat/n).toFixed(1)} of 5</dd>
+            <dt>Tenure</dt><dd>${(s.tenure/n).toFixed(0)} months</dd></dl></div>
+          <div><div class="k">Most common top reasons</div>
+            ${top.length?top.map(([l,v])=>`<div class="hrow" style="grid-template-columns:1fr 70px;padding:3px 0"><span>${l}</span><span class="val">${pc(v/n)}</span></div>`).join(''):'<span class="muted">No customers at this cutoff.</span>'}</div>
+          <div><div class="k">Playbook: ${S.playbook}</div><p style="margin-bottom:6px">${ex.offer}.</p><p class="muted small" style="margin:0">Expected save rate ${pc(ex.save)}. Channel: ${ex.channel}.</p>
+            <p style="margin-top:10px"><button class="btn alt sm" data-act="viewseg" data-seg="${k}">See these customers</button></p></div>
+        </div></article>`}).join('')}`;
+}
+
+/* ============ CUSTOMERS ============ */
+function renderCustomers(){
+  $('#tab-customers').innerHTML=`
+    <h2>At-risk customers</h2>
+    <p class="muted">Sorted by churn risk. Select a customer to see why the model flagged them.</p>
+    <div class="ctrl">
+      <label>Segment<select id="f-seg"><option value="all">All segments</option>${SEGKEYS.map(k=>`<option value="${k}" ${state.segF===k?'selected':''}>${SEG[k].name}</option>`).join('')}</select></label>
+      <label>Plan<select id="f-plan"><option value="all">All plans</option>${PLANS.map(p=>`<option ${state.planF===p[0]?'selected':''}>${p[0]}</option>`).join('')}</select></label>
+    </div>
+    <div class="grid2"><div id="cust-table"></div><div id="cust-detail" class="detail"></div></div>`;
+  $('#f-seg').addEventListener('change',e=>{state.segF=e.target.value;state.shown=30;renderCustOut()});
+  $('#f-plan').addEventListener('change',e=>{state.planF=e.target.value;state.shown=30;renderCustOut()});
+  renderCustOut();
+}
+function filtered(){return atRisk.filter(c=>(state.segF==='all'||c.seg===state.segF)&&(state.planF==='all'||c.plan===state.planF))}
+function renderCustOut(){
+  const rows=filtered();
+  if(rows.length&&!rows.find(c=>c.id===state.selId))state.selId=rows[0].id;
+  $('#cust-table').innerHTML=`<div class="panel" style="padding:8px 8px 14px"><p class="muted small" style="padding:8px 10px 0;margin:0">${fmt(rows.length)} customers match.</p><div class="tw"><table><thead><tr><th>Customer</th><th>Plan</th><th>Risk</th><th>Segment</th><th>Top reason</th></tr></thead><tbody>
+  ${rows.slice(0,state.shown).map(c=>{const tr=topReasons(c,1)[0];return `<tr class="pick ${c.id===state.selId?'sel':''}" data-act="pick" data-id="${c.id}" tabindex="0"><td><b>${c.name}</b><br><span class="muted small">${c.id}</span></td><td>${c.plan}</td><td><div class="riskcell"><span class="track"><span class="fill" style="display:block;width:${c.risk*100}%"></span></span><b>${pc(c.risk)}</b></div></td><td><i class="dot" style="background:${SEG[c.seg].color}"></i>${SEG[c.seg].name}</td><td>${tr?tr.text:'No single signal'}</td></tr>`}).join('')}
+  </tbody></table></div>${rows.length>state.shown?`<p style="text-align:center;margin:12px 0 0"><button class="btn alt sm" data-act="more">Show 30 more</button></p>`:''}</div>`;
+  renderDetail();
+}
+function renderDetail(){
+  const c=live.find(x=>x.id===state.selId);const el=$('#cust-detail');
+  if(!c){el.innerHTML='<div class="panel"><p class="muted">No customers match these filters. Lower the cutoff or clear a filter.</p></div>';return}
+  const [bl,bc]=band(c.risk);
+  const cs=c.contrib.map((v,j)=>({v,j})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)).slice(0,6);
+  const mx=Math.max(...cs.map(a=>Math.abs(a.v)),.01);
+  el.innerHTML=`<div class="panel">
+    <h3>${c.name} <span class="muted small">${c.id}</span></h3>
+    <div style="display:flex;align-items:baseline;gap:12px;margin:8px 0"><span class="num big" style="color:var(--crimson)">${pc(c.risk)}</span><span class="pill ${bc}">${bl} risk</span></div>
+    <p class="small muted">Chance of leaving in the next 90 days</p>
+    <dl class="prof"><dt>Plan</dt><dd>${c.plan}, ₹${c.fee} a month</dd><dt>Tenure</dt><dd>${c.tenure} months</dd><dt>Last login</dt><dd>${c.days} days ago</dd><dt>Logins (30 days)</dt><dd>${c.logins}</dd><dt>Usage change</dt><dd>${c.usage}%</dd><dt>Failed payments</dt><dd>${c.failed}</dd><dt>Tickets, satisfaction</dt><dd>${c.tickets}, ${c.csat} of 5</dd><dt>Segment</dt><dd><i class="dot" style="background:${SEG[c.seg].color}"></i>${SEG[c.seg].name}</dd></dl>
+    <h3 style="font-size:15px">Why this score</h3>
+    ${cs.map(a=>`<div class="drow" style="grid-template-columns:130px 1fr 44px"><span>${FEATS[a.j].label}</span><span class="dv"><i style="${a.v>=0?'left:50%':'right:50%'};width:${Math.abs(a.v)/mx*50}%;background:${a.v>=0?'var(--crimson)':'var(--teal)'}"></i></span><span class="dn">${a.v>=0?'+':''}${a.v.toFixed(2)}</span></div>`).join('')}
+    <p class="small muted" style="margin-top:6px">Red pushes risk up, teal pulls it down.</p>
+    <p style="margin:14px 0 0"><button class="btn go" data-act="toagent" data-id="${c.id}">Run retention agent on ${c.first}</button></p>
+  </div>`;
+}
+
+/* ============ AGENT ============ */
+let timer=null;
+function renderAgent(){
+  const list=atRisk.slice(0,60);
+  if(state.selId&&!list.find(c=>c.id===state.selId)){const c=live.find(x=>x.id===state.selId);if(c)list.unshift(c)}
+  $('#tab-agent').innerHTML=`
+    <h2>Retention agent</h2>
+    <p class="muted">An orchestrator hands each customer to five specialist agents in turn. Run it on one customer to see its reasoning, or on every at-risk customer to plan a campaign.</p>
+    <div class="ctrl">
+      <label>Customer<select id="a-pick">${list.map(c=>`<option value="${c.id}" ${c.id===state.selId?'selected':''}>${c.id} ${c.name}, ${pc(c.risk)} risk, ${SEG[c.seg].name}</option>`).join('')}</select></label>
+      <label>Auto-approve limit per customer: <b id="a-limv">₹${state.limit}</b><input id="a-lim" type="range" min="0" max="400" step="10" value="${state.limit}"></label>
+      <label>Save-rate assumption: <b id="a-scv">${Math.round(state.scale*100)}%</b><input id="a-sc" type="range" min="50" max="150" step="10" value="${Math.round(state.scale*100)}"></label>
+    </div>
+    <p style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px"><button class="btn go" data-act="run1">Run agent on this customer</button><button class="btn" data-act="runall">Plan campaign for all ${fmt(atRisk.length)} at-risk customers</button></p>
+    <div id="a-out"></div>`;
+  $('#a-pick').addEventListener('change',e=>{state.selId=e.target.value;state.trace=0;state.traceId=null;renderAgentOut()});
+  $('#a-lim').addEventListener('input',e=>{state.limit=+e.target.value;$('#a-limv').textContent='₹'+state.limit;renderAgentOut()});
+  $('#a-sc').addEventListener('input',e=>{state.scale=e.target.value/100;$('#a-scv').textContent=e.target.value+'%';renderAgentOut()});
+  renderAgentOut();
+}
+const STEPS=['Data Agent','Churn Prediction Agent','Segmentation Agent','Root-Cause Agent','Retention Strategy Agent','Governance check'];
+function traceHTML(c){
+  const p=makePlan(c),S=SEG[c.seg],[bl]=band(c.risk),rs=topReasons(c,3),mx=Math.max(...rs.map(r=>r.v),.01);
+  const body=[
+    `Pulled 9 signals for ${c.id} from usage, billing, support and CRM records. ${c.plan} plan at ₹${c.fee} a month, customer for ${c.tenure} month${c.tenure>1?'s':''}. No missing values.`,
+    `Churn risk is <b>${pc(c.risk,1)}</b> over the next 90 days (${bl.toLowerCase()}). With your cutoff at ${pc(state.thr)}, this customer is ${c.risk>=state.thr?'<b>on</b>':'<b>not on</b>'} the at-risk list.`,
+    `Biggest driver: <b>${c.driver.toLowerCase()}</b>. Segment: <b><i class="dot" style="background:${S.color}"></i>${S.name}</b>.`,
+    rs.length?`Top reasons, strongest first:${rs.map(r=>`<div class="drow" style="grid-template-columns:1fr 90px 40px"><span>${r.text}</span><span class="dv"><i style="left:0;width:${r.v/mx*100}%;background:var(--crimson)"></i></span><span class="dn">+${r.v.toFixed(2)}</span></div>`).join('')}`:'No single signal stands out.',
+    `Retrieved the <b>${S.playbook}</b> playbook. Action: <b>${p.offer}</b>. Send via ${p.channel.toLowerCase()}. Timing: ${p.timing.toLowerCase()}.
+      <div class="nums"><div><span class="num">${pc(p.save)}</span><span class="l">Expected save rate</span></div><div><span class="num">₹${fmt(p.cost)}</span><span class="l">Cost</span></div><div><span class="num">${inr(p.gain)}</span><span class="l">Revenue protected</span></div><div><span class="num" style="color:${p.net>0?'var(--teal)':'var(--crimson)'}">${p.net>0?'+':''}${inr(p.net)}</span><span class="l">Net value</span></div></div>
+      ${p.flags.map(f=>`<div class="flag">${f}</div>`).join('')}
+      <div class="msg">${p.msg}</div>`,
+    (()=>{
+      if(p.final==='skip')return `<b>Skipped.</b> Expected revenue protected is lower than the cost, so the agent does not recommend spending on this customer.`;
+      if(p.final==='auto')return `<b>Auto-approved.</b> Cost of ₹${fmt(p.cost)} is within your ₹${state.limit} limit.`;
+      if(p.final==='approved')return `<b>Approved by you.</b> Ready to send.<div class="verdict"><button class="btn alt sm" data-act="reject" data-id="${c.id}">Reject instead</button></div>`;
+      if(p.final==='rejected')return `<b>Rejected by you.</b> Nothing will be sent.<div class="verdict"><button class="btn alt sm" data-act="approve" data-id="${c.id}">Approve instead</button></div>`;
+      return `<b>Needs your approval.</b> Cost of ₹${fmt(p.cost)} is above your ₹${state.limit} limit.<div class="verdict"><button class="btn go sm" data-act="approve" data-id="${c.id}">Approve</button><button class="btn alt sm" data-act="reject" data-id="${c.id}">Reject</button></div>`;
+    })()
+  ];
+  const shown=state.traceId===c.id?state.trace:0;
+  return `<div class="panel"><h3>Agent trace for ${c.name} (${c.id})</h3><div class="sub">${shown?'The orchestrator ran these steps in order.':'Press "Run agent on this customer" to start.'}</div>
+    <ol class="trace" aria-live="polite">${STEPS.map((s,i)=>`<li class="step ${i<shown?'on':''}"><span class="node">${i<shown?'✓':i+1}</span><h4>${s}</h4><div class="body">${i<shown?body[i]:'<span class="muted">Waiting</span>'}</div></li>`).join('')}</ol></div>`;
+}
+function batchHTML(){
+  if(!state.batch)return '';
+  if(state.batchPct<100)return `<div class="panel"><h3>Planning campaign</h3><div class="progress"><i style="width:${state.batchPct}%"></i></div><p class="muted small">Running the agents on ${fmt(atRisk.length)} customers.</p></div>`;
+  const seg={};SEGKEYS.forEach(k=>seg[k]={n:0,cost:0,gain:0,pend:0,skip:0});
+  const t={n:atRisk.length,auto:0,appr:0,pend:0,rej:0,skip:0,cost:0,gain:0,pendCost:0,pendGain:0};const queue=[];
+  atRisk.forEach(c=>{const p=makePlan(c),s=seg[c.seg];
+    if(p.final==='auto'||p.final==='approved'){p.final==='auto'?t.auto++:t.appr++;t.cost+=p.cost;t.gain+=p.gain;s.n++;s.cost+=p.cost;s.gain+=p.gain}
+    else if(p.final==='pending'){t.pend++;t.pendCost+=p.cost;t.pendGain+=p.gain;s.pend++;queue.push({c,p})}
+    else if(p.final==='rejected')t.rej++;else{t.skip++;s.skip++}});
+  const roi=t.cost?t.gain/t.cost:0;
+  return `<div class="panel"><h3>Campaign plan for ${fmt(t.n)} at-risk customers</h3><div class="sub">Based on your auto-approve limit of ₹${state.limit} and a save-rate assumption of ${Math.round(state.scale*100)}%.</div>
+    <div class="nums">
+      <div><span class="num">${fmt(t.auto+t.appr)}</span><span class="l">Customers to contact</span></div>
+      <div><span class="num">${inr(t.cost)}</span><span class="l">Budget committed</span></div>
+      <div><span class="num">${inr(t.gain)}</span><span class="l">Revenue protected (12 months)</span></div>
+      <div><span class="num" style="color:var(--teal)">${roi.toFixed(1)}×</span><span class="l">Return on spend</span></div>
+    </div>
+    <p class="small muted">${fmt(t.auto)} auto-approved, ${fmt(t.appr)} approved by you, <b>${fmt(t.pend)} waiting for approval</b> (${inr(t.pendCost)} cost, ${inr(t.pendGain)} protected if approved), ${fmt(t.rej)} rejected, ${fmt(t.skip)} skipped because the cost outweighs the benefit.</p>
+    <div class="tw"><table><thead><tr><th>Segment</th><th class="n">Contact</th><th class="n">Waiting</th><th class="n">Skipped</th><th class="n">Cost</th><th class="n">Protected</th><th class="n">Return</th></tr></thead><tbody>
+    ${SEGKEYS.map(k=>`<tr><td><i class="dot" style="background:${SEG[k].color}"></i>${SEG[k].name}</td><td class="n">${fmt(seg[k].n)}</td><td class="n">${fmt(seg[k].pend)}</td><td class="n">${fmt(seg[k].skip)}</td><td class="n">${inr(seg[k].cost)}</td><td class="n">${inr(seg[k].gain)}</td><td class="n">${seg[k].cost?(seg[k].gain/seg[k].cost).toFixed(1)+'×':'–'}</td></tr>`).join('')}
+    </tbody></table></div></div>
+    ${queue.length?`<div class="panel"><h3>Approval queue</h3><div class="sub">These plans cost more than your auto-approve limit. The ${Math.min(8,queue.length)} highest-value are shown.</div>
+      <div class="tw"><table><thead><tr><th>Customer</th><th>Action</th><th class="n">Cost</th><th class="n">Net value</th><th></th></tr></thead><tbody>
+      ${queue.sort((a,b)=>b.p.net-a.p.net).slice(0,8).map(({c,p})=>`<tr><td><b>${c.name}</b><br><span class="muted small">${c.id}, ${pc(c.risk)} risk</span></td><td>${p.offer}</td><td class="n">₹${fmt(p.cost)}</td><td class="n">+${inr(p.net)}</td><td><button class="btn go sm" data-act="approve" data-id="${c.id}">Approve</button> <button class="btn alt sm" data-act="reject" data-id="${c.id}">Reject</button></td></tr>`).join('')}
+      </tbody></table></div><p style="margin:12px 0 0"><button class="btn alt sm" data-act="approveall">Approve all ${fmt(queue.length)} waiting plans</button></p></div>`:''}`;
+}
+function renderAgentOut(){
+  const c=live.find(x=>x.id===state.selId);
+  $('#a-out').innerHTML=(c?traceHTML(c):'<p class="muted">No at-risk customers at this cutoff. Lower the cutoff to continue.</p>')+batchHTML();
+}
+
+/* ============ EVENTS ============ */
+function runSingle(){
+  const c=live.find(x=>x.id===state.selId);if(!c)return;
+  clearTimeout(timer);state.traceId=c.id;state.trace=0;
+  const tick=()=>{state.trace++;renderAgentOut();if(state.trace<STEPS.length)timer=setTimeout(tick,reduced?0:520)};
+  tick();
+}
+function runBatch(){
+  clearTimeout(timer);state.batch=true;state.batchPct=0;renderAgentOut();
+  const bar=$('#a-out .progress i');
+  if(reduced){state.batchPct=100;renderAgentOut();return}
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{const b=$('#a-out .progress i');if(b)b.style.width='100%'}));
+  timer=setTimeout(()=>{state.batchPct=100;renderAgentOut()},800);
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  const a=t.dataset.act,id=t.dataset.id;
+  if(a==='pick'){state.selId=id;renderCustOut()}
+  else if(a==='more'){state.shown+=30;renderCustOut()}
+  else if(a==='viewseg'){state.segF=t.dataset.seg;state.shown=30;setTab('customers')}
+  else if(a==='toagent'){state.selId=id;state.batch=false;setTab('agent');runSingle()}
+  else if(a==='run1'){runSingle()}
+  else if(a==='runall'){runBatch()}
+  else if(a==='approve'||a==='reject'){state.approvals[id]=a==='approve'?'approved':'rejected';renderAgentOut()}
+  else if(a==='approveall'){atRisk.forEach(c=>{const p=makePlan(c);if(p.final==='pending')state.approvals[c.id]='approved'});renderAgentOut()}
+});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('tr.pick')){e.preventDefault();e.target.click()}});
+
+refresh();
+setTab('overview');
+</script>
+</body>
+</html>
